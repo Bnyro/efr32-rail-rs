@@ -14,6 +14,7 @@ static mut FIFO_BUFFER: [u32; PACKET_LENGTH_BYTES] = [0; PACKET_LENGTH_BYTES];
 unsafe extern "C" fn events_callback(rail_handle: sl_rail_handle_t, event: sl_rail_events_t) {
     // ... handle RAIL events, e.g., receive and transmit completion
     if event == SL_RAIL_EVENT_RX_PACKET_RECEIVED.into() {
+        #[cfg(feature = "defmt-logging")]
         defmt::info!("received packet");
 
         let radio = Radio::from(rail_handle);
@@ -27,6 +28,7 @@ unsafe extern "C" fn events_callback(rail_handle: sl_rail_handle_t, event: sl_ra
 }
 
 unsafe extern "C" fn init_callback(_c: RAIL_Handle_t) {
+    #[cfg(feature = "defmt-logging")]
     defmt::info!("successfully initialized radio");
 }
 
@@ -299,6 +301,7 @@ fn SYNTH() {
 #[unsafe(no_mangle)]
 pub extern "C" fn RAILCb_AssertFailed(_rail_handle: *mut c_void, error_code: u32) {
     // pub extern "C" fn sl_railcb_assert_failed(rail_handle: *mut c_void, error_code: u32, line: i32) {
+    #[cfg(feature = "defmt-logging")]
     defmt::info!("rail crashed with code {}", error_code);
     panic!()
 }

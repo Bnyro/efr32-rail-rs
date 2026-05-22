@@ -7,11 +7,13 @@ build = "build.rs"
 [lib]
 name = "efr32_rail"
 
+[[bin]]
+name = "trx_demo"
+required-features = ["defmt-logging"]
+
 [dependencies]
 cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
 cortex-m-rt = { version = "0.7.5", features = ["device"] }
-defmt = "1.0"
-defmt-rtt = "1.0"
 # critical section feature is needed to call `Peripherals::take`
 # rt is needed to be able to listen to interrupts
 efr32mg22-pac = { git = "https://github.com/Bnyro/efr32mg22-pac", rev = "v0.1.0", features = [
@@ -19,13 +21,17 @@ efr32mg22-pac = { git = "https://github.com/Bnyro/efr32mg22-pac", rev = "v0.1.0"
   "rt",
 ] }
 
+defmt = { version = "1.0", optional = true }
+defmt-rtt = { version = "1.0", optional = true }
+
 [build-dependencies]
 bindgen = "0.72"
 cc = "1.2"
 
 [features]
 # set logging levels here
-default = ["defmt-default"]
+default = []
+defmt-logging = ["defmt", "defmt-rtt", "defmt-default"]
 
 defmt-debug = []
 # do NOT modify these features
