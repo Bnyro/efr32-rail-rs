@@ -1,0 +1,36 @@
+[package]
+name = "efr32-rail"
+version = "0.1.0"
+edition = "2024"
+build = "build.rs"
+
+[lib]
+name = "efr32_rail"
+
+[dependencies]
+cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
+cortex-m-rt = { version = "0.7.5", features = ["device"] }
+defmt = "1.0"
+defmt-rtt = "1.0"
+# critical section feature is needed to call `Peripherals::take`
+# rt is needed to be able to listen to interrupts
+efr32mg22-pac = { git = "https://github.com/Bnyro/efr32mg22-pac", rev = "v0.1.0", features = [
+  "critical-section",
+  "rt",
+] }
+
+[build-dependencies]
+bindgen = "0.72"
+cc = "1.2"
+
+[features]
+# set logging levels here
+default = ["defmt-default"]
+
+defmt-debug = []
+# do NOT modify these features
+defmt-default = []
+defmt-error = []
+defmt-info = []
+defmt-trace = []
+defmt-warn = []

@@ -1,0 +1,6 @@
+[submodule "simplicity-sdk"]
+	path = simplicity-sdk
+	url = https://github.com/SiliconLabs/simplicity_sdk
+[submodule "gecko-sdk"]
+	path = gecko-sdk
+	url = https://github.com/SiliconLabs/gecko_sdk
