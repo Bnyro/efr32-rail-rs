@@ -43,9 +43,25 @@ impl From<sl_rail_handle_t> for Radio {
 }
 
 impl Radio {
-    pub fn new(peripherals: &Peripherals, on_packet_received: fn()) -> Self {
-        Self::configure_clocks(peripherals);
+    /// Configure required clocks for starting the Radio.
+    pub fn configure_clocks(peripherals: &Peripherals) {
+        // enable HFXO Clock
+        peripherals.cmu_ns.clken0().write(|w| w.hfxo0().set_bit());
+        peripherals.hfxo0_ns.ctrl().write(|w| w.forceen().set_bit());
+        // wait until the clock finished starting
+        while peripherals.hfxo0_ns.status().read().rdy().bit_is_clear() {}
+        // set sysclk to HFXO Clock - this is required according to https://docs.silabs.com/rail/latest/rail-api/efr32-main#high-frequency-clocks
+        // otherwise sl_rail_configure_channels will crash
+        peripherals.cmu_ns.sysclkctrl().write(|w| w.clksel().hfxo());
+    }
 
+    /// Create and initialize the radio. This immediately starts listening for packets.
+    ///
+    /// This assumes that the clocks are already configured properly. To configure
+    /// them, you can either call [Radio::configure_clocks] or do the following:
+    /// * enable the HFXO clock and wait until it is ready
+    /// * set HFXO as the sysclk source
+    pub fn new(on_packet_received: fn()) -> Self {
         // The config if from the code example at https://docs.silabs.com/rail/latest/rail-api/
         let rail_config = unsafe {
             sl_rail_config {
@@ -67,19 +83,7 @@ impl Radio {
         Self { rail_handle }
     }
 
-    // Configure required clocks for starting the Radio.
-    fn configure_clocks(peripherals: &Peripherals) {
-        // enable HFXO Clock
-        peripherals.cmu_ns.clken0().write(|w| w.hfxo0().set_bit());
-        peripherals.hfxo0_ns.ctrl().write(|w| w.forceen().set_bit());
-        // wait until the clock finished starting
-        while peripherals.hfxo0_ns.status().read().rdy().bit_is_clear() {}
-        // set sysclk to HFXO Clock - this is required according to https://docs.silabs.com/rail/latest/rail-api/efr32-main#high-frequency-clocks
-        // otherwise sl_rail_configure_channels will crash
-        peripherals.cmu_ns.sysclkctrl().write(|w| w.clksel().hfxo());
-    }
-
-    // Prepare for sending packets and start listening for packets.
+    /// Prepare for sending packets and start listening for packets.
     fn init(p_rail_config: sl_rail_config_t) -> sl_rail_handle_t {
         // This is ported from the code example at https://docs.silabs.com/rail/latest/rail-api/
         unsafe {
@@ -135,7 +139,7 @@ impl Radio {
         }
     }
 
-    // Send a packet.
+    /// Send a packet.
     pub fn send_packet(&self, packet: [u8; PACKET_LENGTH_BYTES]) {
         unsafe {
             // prepare packet
@@ -160,14 +164,14 @@ impl Radio {
         }
     }
 
-    // Keep the received packet inside the queue and don't automatically flush it.
-    // This ensures that you can still read the content of the received packet later,
-    // and don't have to read it immediately when it arrives.
+    /// Keep the received packet inside the queue and don't automatically flush it.
+    /// This ensures that you can still read the content of the received packet later,
+    /// and don't have to read it immediately when it arrives.
     fn hold_packet(&self) {
         unsafe { sl_rail_hold_rx_packet(self.rail_handle) };
     }
 
-    // Call the user-provided callback when a packet gets received.
+    /// Call the user-provided callback when a packet gets received.
     fn trigger_receive_callback(&self) {
         let rail_config = unsafe { sl_rail_get_config(self.rail_handle) };
         let receive_callback: fn() =
@@ -175,7 +179,7 @@ impl Radio {
         (receive_callback)();
     }
 
-    // Receive a packet.
+    /// Read a received packet.
     pub fn read_received_packet(&self) -> [u8; PACKET_LENGTH_BYTES] {
         // will be overriden by sl_rail_get_rx_packet_info, so content doesn't matter
         let mut p_packet_info = sl_rail_rx_packet_info {

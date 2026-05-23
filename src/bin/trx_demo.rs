@@ -25,8 +25,12 @@ static mut BUTTON_PRESSED: bool = false;
 fn main() -> ! {
     let peripherals = Peripherals::take().unwrap();
 
-    let radio = Radio::new(&peripherals, || unsafe { PACKET_RECEIVED = true });
+    // set up clocks for powering the radio
+    Radio::configure_clocks(&peripherals);
 
+    let radio = Radio::new(|| unsafe { PACKET_RECEIVED = true });
+
+    // set up GPIO peripherals for the app
     setup_led(&peripherals);
     setup_button_for_interrupt(&peripherals);
 
