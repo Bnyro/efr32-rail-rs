@@ -30,9 +30,11 @@ fn main() -> ! {
     // set up clocks for powering the radio
     Radio::configure_clocks(&peripherals);
 
+    // TODO: add some error handling to this example app
     let radio = Radio::new(PACKET_LENGTH_BYTES as u16, || unsafe {
         PACKET_RECEIVED = true
-    });
+    })
+    .unwrap();
 
     // set up GPIO peripherals for the app
     setup_led(&peripherals);
@@ -48,7 +50,7 @@ fn main() -> ! {
                 packet_received_counter += 1;
 
                 let mut packet: [u8; PACKET_LENGTH_BYTES] = [0; PACKET_LENGTH_BYTES];
-                radio.read_received_packet(&mut packet);
+                radio.read_received_packet(&mut packet).unwrap();
                 defmt::info!("received packet {}: {:X}", packet_received_counter, packet);
 
                 led_enabled = !led_enabled;
@@ -63,7 +65,7 @@ fn main() -> ! {
                     0x0F, 0x16, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB,
                     0xCC, 0xDD, 0xEE,
                 ];
-                radio.send_packet(&out_packet);
+                radio.send_packet(&out_packet).unwrap();
                 defmt::info!("sent packet {}: {:X}", packet_sent_counter, out_packet);
 
                 led_enabled = !led_enabled;
