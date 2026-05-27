@@ -21,6 +21,8 @@ use efr32mg22_pac::{self as _, NVIC, Peripherals, interrupt};
 static mut PACKET_RECEIVED: bool = false;
 static mut BUTTON_PRESSED: bool = false;
 
+const PACKET_LENGTH_BYTES: usize = 16;
+
 #[cortex_m_rt::entry]
 fn main() -> ! {
     let peripherals = Peripherals::take().unwrap();
@@ -28,7 +30,9 @@ fn main() -> ! {
     // set up clocks for powering the radio
     Radio::configure_clocks(&peripherals);
 
-    let radio = Radio::new(|| unsafe { PACKET_RECEIVED = true });
+    let radio = Radio::new(PACKET_LENGTH_BYTES as u16, || unsafe {
+        PACKET_RECEIVED = true
+    });
 
     // set up GPIO peripherals for the app
     setup_led(&peripherals);
@@ -43,7 +47,8 @@ fn main() -> ! {
                 PACKET_RECEIVED = false;
                 packet_received_counter += 1;
 
-                let packet = radio.read_received_packet();
+                let mut packet: [u8; PACKET_LENGTH_BYTES] = [0; PACKET_LENGTH_BYTES];
+                radio.read_received_packet(&mut packet);
                 defmt::info!("received packet {}: {:X}", packet_received_counter, packet);
 
                 led_enabled = !led_enabled;
@@ -54,11 +59,11 @@ fn main() -> ! {
                 BUTTON_PRESSED = false;
                 packet_sent_counter += 1;
 
-                let out_packet: [u8; _] = [
+                let out_packet: [u8; PACKET_LENGTH_BYTES] = [
                     0x0F, 0x16, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB,
                     0xCC, 0xDD, 0xEE,
                 ];
-                radio.send_packet(out_packet);
+                radio.send_packet(&out_packet);
                 defmt::info!("sent packet {}: {:X}", packet_sent_counter, out_packet);
 
                 led_enabled = !led_enabled;

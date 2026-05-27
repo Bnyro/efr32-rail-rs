@@ -4,12 +4,12 @@ use efr32mg22_pac::{Peripherals, interrupt};
 
 use crate::rail::*;
 
-pub const PACKET_LENGTH_BYTES: usize = 16;
+pub const MAX_PACKET_LENGTH_BYTES: usize = 4096;
 
 // FIFO BUFFER has to survive the whole program execution, so we have to declare it
 // as static. Otherwise, if it'd be removed from the stack, RAIL could no longer
 // write received packets into it.
-static mut FIFO_BUFFER: [u32; PACKET_LENGTH_BYTES] = [0; PACKET_LENGTH_BYTES];
+static mut FIFO_BUFFER: [u32; MAX_PACKET_LENGTH_BYTES / 4] = [0; MAX_PACKET_LENGTH_BYTES / 4];
 
 unsafe extern "C" fn events_callback(rail_handle: sl_rail_handle_t, event: sl_rail_events_t) {
     // ... handle RAIL events, e.g., receive and transmit completion
@@ -34,11 +34,16 @@ unsafe extern "C" fn init_callback(_c: RAIL_Handle_t) {
 
 pub struct Radio {
     rail_handle: sl_rail_handle_t,
+    packet_length_bytes: u16,
 }
 
 impl From<sl_rail_handle_t> for Radio {
     fn from(rail_handle: sl_rail_handle_t) -> Self {
-        Radio { rail_handle }
+        let rail_config = unsafe { sl_rail_get_config(rail_handle) };
+        Radio {
+            rail_handle,
+            packet_length_bytes: unsafe { (*rail_config).tx_fifo_bytes },
+        }
     }
 }
 
@@ -61,7 +66,7 @@ impl Radio {
     /// them, you can either call [Radio::configure_clocks] or do the following:
     /// * enable the HFXO clock and wait until it is ready
     /// * set HFXO as the sysclk source
-    pub fn new(on_packet_received: fn()) -> Self {
+    pub fn new(packet_length_bytes: u16, on_packet_received: fn()) -> Self {
         // The config if from the code example at https://docs.silabs.com/rail/latest/rail-api/
         let rail_config = unsafe {
             sl_rail_config {
@@ -71,7 +76,7 @@ impl Radio {
                 opaque_value: [0],
                 rx_packet_queue_entries: SL_RAIL_BUILTIN_RX_PACKET_QUEUE_ENTRIES as u16,
                 rx_fifo_bytes: SL_RAIL_BUILTIN_RX_FIFO_BYTES as u16,
-                tx_fifo_bytes: PACKET_LENGTH_BYTES as u16,
+                tx_fifo_bytes: packet_length_bytes,
                 tx_fifo_init_bytes: 0,
                 p_rx_packet_queue: sl_rail_builtin_rx_packet_queue_ptr,
                 p_rx_fifo_buffer: sl_rail_builtin_rx_fifo_ptr,
@@ -80,7 +85,10 @@ impl Radio {
         };
         let rail_handle = Self::init(rail_config);
 
-        Self { rail_handle }
+        Self {
+            rail_handle,
+            packet_length_bytes,
+        }
     }
 
     /// Prepare for sending packets and start listening for packets.
@@ -140,17 +148,13 @@ impl Radio {
     }
 
     /// Send a packet.
-    pub fn send_packet(&self, packet: [u8; PACKET_LENGTH_BYTES]) {
+    pub fn send_packet(&self, packet: &[u8]) {
         unsafe {
             // prepare packet
             // https://github.com/SiliconLabs/simplicity_sdk/blob/b41bec3ff2485199c1a5a9995b3e649e118c1b8d/app/rail/component/sl_rail_sdk_packet_assistant/sl_rail_sdk_packet_assistant.c#L594
-            let bytes_written = sl_rail_write_tx_fifo(
-                self.rail_handle,
-                &packet[0],
-                PACKET_LENGTH_BYTES as u16,
-                true,
-            );
-            assert_eq!(bytes_written, PACKET_LENGTH_BYTES as u16);
+            let bytes_written =
+                sl_rail_write_tx_fifo(self.rail_handle, &packet[0], self.packet_length_bytes, true);
+            assert_eq!(bytes_written, self.packet_length_bytes as u16);
 
             // channel ID is channel number start: https://github.com/SiliconLabs/simplicity_sdk/blob/b41bec3ff2485199c1a5a9995b3e649e118c1b8d/app/rail/component/sl_rail_sdk_phy_selector/sl_rail_sdk_phy_selector.c#L84
             let channel = sl_rail_get_first_channel(self.rail_handle, core::ptr::null());
@@ -180,7 +184,7 @@ impl Radio {
     }
 
     /// Read a received packet.
-    pub fn read_received_packet(&self) -> [u8; PACKET_LENGTH_BYTES] {
+    pub fn read_received_packet(&self, target_buffer: &mut [u8]) {
         // will be overriden by sl_rail_get_rx_packet_info, so content doesn't matter
         let mut p_packet_info = sl_rail_rx_packet_info {
             packet_status: 0,
@@ -200,18 +204,12 @@ impl Radio {
             );
             assert!(!packet_handle.is_null());
 
-            let mut input_buffer: [u8; PACKET_LENGTH_BYTES] = [0; PACKET_LENGTH_BYTES];
-            let status = sl_rail_copy_rx_packet(
-                self.rail_handle,
-                &mut input_buffer as *mut u8,
-                &p_packet_info,
-            );
+            let status =
+                sl_rail_copy_rx_packet(self.rail_handle, &mut target_buffer[0], &p_packet_info);
             assert_eq!(status, SL_RAIL_STATUS_NO_ERROR);
 
             let status = sl_rail_release_rx_packet(self.rail_handle, packet_handle);
             assert_eq!(status, SL_RAIL_STATUS_NO_ERROR);
-
-            input_buffer
         }
     }
 }
