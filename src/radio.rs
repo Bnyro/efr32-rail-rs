@@ -45,6 +45,11 @@ pub struct Radio {
     radio_config: RadioConfig,
 }
 
+// https://users.rust-lang.org/t/solved-how-to-move-non-send-between-threads-or-an-alternative/19928/4
+// Dependent crates may require Send, but the rail handle type is c_void,
+// causing Rust to not automatically implement Send
+unsafe impl Send for Radio {}
+
 impl From<sl_rail_handle_t> for Radio {
     fn from(rail_handle: sl_rail_handle_t) -> Self {
         let rail_config = unsafe { sl_rail_get_config(rail_handle) };
