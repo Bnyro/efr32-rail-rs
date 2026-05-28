@@ -15,7 +15,7 @@
 #![no_main]
 
 use defmt_rtt as _;
-use efr32_rail::radio::Radio;
+use efr32_rail::radio::{Radio, RadioConfig};
 use efr32mg22_pac::{self as _, NVIC, Peripherals, interrupt};
 
 static mut PACKET_RECEIVED: bool = false;
@@ -30,11 +30,13 @@ fn main() -> ! {
     // set up clocks for powering the radio
     Radio::configure_clocks(&peripherals);
 
+    let radio_config = RadioConfig {
+        tx_power_dbm: 0,
+        packet_length_bytes: PACKET_LENGTH_BYTES as u16,
+        on_packet_received: || unsafe { PACKET_RECEIVED = true },
+    };
     // TODO: add some error handling to this example app
-    let radio = Radio::new(PACKET_LENGTH_BYTES as u16, || unsafe {
-        PACKET_RECEIVED = true
-    })
-    .unwrap();
+    let radio = Radio::new(radio_config).unwrap();
 
     // set up GPIO peripherals for the app
     setup_led(&peripherals);
