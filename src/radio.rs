@@ -43,7 +43,6 @@ pub struct RadioConfig {
 
 pub struct Radio {
     rail_handle: sl_rail_handle_t,
-    radio_config: RadioConfig,
 }
 
 // https://users.rust-lang.org/t/solved-how-to-move-non-send-between-threads-or-an-alternative/19928/4
@@ -53,14 +52,7 @@ unsafe impl Send for Radio {}
 
 impl From<sl_rail_handle_t> for Radio {
     fn from(rail_handle: sl_rail_handle_t) -> Self {
-        let rail_config = unsafe { sl_rail_get_config(rail_handle) };
-        let radio_config = unsafe { (*rail_config).p_opaque_handle1 as *mut RadioConfig };
-
-        Radio {
-            rail_handle,
-            // TODO: this copy is probably inefficient here
-            radio_config: unsafe { *radio_config },
-        }
+        Radio { rail_handle }
     }
 }
 
@@ -83,12 +75,16 @@ impl Radio {
     /// them, you can either call [Radio::configure_clocks] or do the following:
     /// * enable the HFXO clock and wait until it is ready
     /// * set HFXO as the sysclk source
-    pub fn new(mut radio_config: RadioConfig) -> RailResult<Self> {
+    ///
+    /// If the initialization succeeds, you can then call [Radio::start_receive]
+    /// to start listening for incoming packets or [Radio::send_packet] to transmit
+    /// a packet.
+    pub fn new(radio_config: RadioConfig) -> RailResult<Self> {
         // The config if from the code example at https://docs.silabs.com/rail/latest/rail-api/
         let rail_config = unsafe {
             sl_rail_config {
                 events_callback: Some(events_callback),
-                p_opaque_handle1: &mut radio_config as *mut _ as *mut c_void,
+                p_opaque_handle1: radio_config.on_packet_received as *mut c_void,
                 p_opaque_handle2: core::ptr::null_mut(),
                 opaque_value: [0],
                 rx_packet_queue_entries: SL_RAIL_BUILTIN_RX_PACKET_QUEUE_ENTRIES as u16,
@@ -102,13 +98,11 @@ impl Radio {
         };
         let rail_handle = Self::init(rail_config, radio_config.tx_power_dbm)?;
 
-        Ok(Self {
-            rail_handle,
-            radio_config,
-        })
+        Ok(Self { rail_handle })
     }
 
     /// Prepare for sending packets and start listening for packets.
+    /// This does not automatically start listening for packets!
     fn init(rail_config: sl_rail_config_t, tx_power_dbm: i16) -> RailResult<sl_rail_handle_t> {
         // This is ported from the code example at https://docs.silabs.com/rail/latest/rail-api/
         unsafe {
@@ -150,19 +144,43 @@ impl Radio {
             )
             .into_rail_result()?;
 
+            Ok(rail_handle)
+        }
+    }
+
+    /// Start listening for incoming packets.
+    pub fn enable_receive(&self) -> RailResult<()> {
+        unsafe {
             // automatically transition back to rx mode after sending/receiving a packet
             let state_transitions = sl_rail_state_transitions {
                 success: SL_RAIL_RF_STATE_RX as u8,
                 error: SL_RAIL_RF_STATE_RX as u8,
             };
-            sl_rail_set_rx_transitions(rail_handle, &state_transitions).into_rail_result()?;
-            sl_rail_set_tx_transitions(rail_handle, &state_transitions).into_rail_result()?;
+            sl_rail_set_rx_transitions(self.rail_handle, &state_transitions).into_rail_result()?;
+            sl_rail_set_tx_transitions(self.rail_handle, &state_transitions).into_rail_result()?;
 
             // start listening for packets
-            let channel = sl_rail_get_first_channel(rail_handle, rail_config);
-            sl_rail_start_rx(rail_handle, channel, core::ptr::null());
+            let channel = sl_rail_get_first_channel(self.rail_handle, core::ptr::null());
+            sl_rail_start_rx(self.rail_handle, channel, core::ptr::null()).into_rail_result()
+        }
+    }
 
-            Ok(rail_handle)
+    /// Stop listening for incoming packets.
+    pub fn disable_receive(&self) -> RailResult<()> {
+        unsafe {
+            // reset transitions so that we don't automatically go back into receiving mode
+            // after sending a packet, but instead go to idle mode
+            let state_transitions = sl_rail_state_transitions {
+                success: SL_RAIL_RF_STATE_IDLE as u8,
+                error: SL_RAIL_RF_STATE_IDLE as u8,
+            };
+            sl_rail_set_tx_transitions(self.rail_handle, &state_transitions).into_rail_result()?;
+            // setting RX here probably has no effect because we're 100% sure that RX gets disabled below,
+            // only here for completeness
+            sl_rail_set_rx_transitions(self.rail_handle, &state_transitions).into_rail_result()?;
+
+            // stop listening for packets by going into idle mode
+            sl_rail_idle(self.rail_handle, SL_RAIL_IDLE as u8, false).into_rail_result()
         }
     }
 
@@ -207,7 +225,9 @@ impl Radio {
 
     /// Call the user-provided callback when a packet gets received.
     fn trigger_receive_callback(&self) {
-        (self.radio_config.on_packet_received)();
+        let rail_config = unsafe { sl_rail_get_config(self.rail_handle) };
+        let callback: fn() = unsafe { core::mem::transmute((*rail_config).p_opaque_handle1) };
+        callback();
     }
 
     /// Read a received packet.
