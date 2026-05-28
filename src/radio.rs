@@ -231,7 +231,9 @@ impl Radio {
     }
 
     /// Read a received packet.
-    pub fn read_received_packet(&self, target_buffer: &mut [u8]) -> RailResult<()> {
+    ///
+    /// Returns the size of the read packet.
+    pub fn read_received_packet(&self, target_buffer: &mut [u8]) -> RailResult<u16> {
         // will be overriden by sl_rail_get_rx_packet_info, so content doesn't matter
         let mut packet_info = sl_rail_rx_packet_info {
             packet_status: 0,
@@ -261,9 +263,9 @@ impl Radio {
                 .into_rail_result()?;
 
             sl_rail_release_rx_packet(self.rail_handle, packet_handle).into_rail_result()?;
-        }
 
-        Ok(())
+            Ok(packet_info.packet_bytes)
+        }
     }
 }
 
