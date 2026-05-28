@@ -5,12 +5,14 @@ use efr32mg22_pac::{Peripherals, interrupt};
 use crate::error::{IntoRailResult, RailError, RailResult};
 use crate::rail::*;
 
-pub const MAX_PACKET_LENGTH_BYTES: usize = 4096;
+// the maximum packet size is 4096 - but we don't want to
+// allocate 4kB in the data section and keep it unused
+pub const RX_FIFO_LENGTH_BYTES: usize = 512;
 
 // FIFO BUFFER has to survive the whole program execution, so we have to declare it
 // as static. Otherwise, if it'd be removed from the stack, RAIL could no longer
 // write received packets into it.
-static mut FIFO_BUFFER: [u32; MAX_PACKET_LENGTH_BYTES / 4] = [0; MAX_PACKET_LENGTH_BYTES / 4];
+static mut FIFO_BUFFER: [u32; RX_FIFO_LENGTH_BYTES / 4] = [0; RX_FIFO_LENGTH_BYTES / 4];
 
 unsafe extern "C" fn events_callback(rail_handle: sl_rail_handle_t, event: sl_rail_events_t) {
     // ... handle RAIL events, e.g., receive and transmit completion
@@ -36,7 +38,6 @@ unsafe extern "C" fn init_callback(_c: RAIL_Handle_t) {
 #[derive(Clone, Copy)]
 pub struct RadioConfig {
     pub tx_power_dbm: i16,
-    pub packet_length_bytes: u16,
     pub on_packet_received: fn(),
 }
 
@@ -92,7 +93,7 @@ impl Radio {
                 opaque_value: [0],
                 rx_packet_queue_entries: SL_RAIL_BUILTIN_RX_PACKET_QUEUE_ENTRIES as u16,
                 rx_fifo_bytes: SL_RAIL_BUILTIN_RX_FIFO_BYTES as u16,
-                tx_fifo_bytes: radio_config.packet_length_bytes,
+                tx_fifo_bytes: RX_FIFO_LENGTH_BYTES as u16,
                 tx_fifo_init_bytes: 0,
                 p_rx_packet_queue: sl_rail_builtin_rx_packet_queue_ptr,
                 p_rx_fifo_buffer: sl_rail_builtin_rx_fifo_ptr,
@@ -168,15 +169,21 @@ impl Radio {
     /// Send a packet.
     pub fn send_packet(&self, packet: &[u8]) -> RailResult<()> {
         unsafe {
-            let packet_size_bytes = self.radio_config.packet_length_bytes;
-            assert_eq!(packet.len() as u16, packet_size_bytes);
+            assert!(
+                packet.len() < RX_FIFO_LENGTH_BYTES,
+                "packet can't be larger than {}",
+                RX_FIFO_LENGTH_BYTES
+            );
 
             // prepare packet
             // https://github.com/SiliconLabs/simplicity_sdk/blob/b41bec3ff2485199c1a5a9995b3e649e118c1b8d/app/rail/component/sl_rail_sdk_packet_assistant/sl_rail_sdk_packet_assistant.c#L594
             let bytes_written =
-                sl_rail_write_tx_fifo(self.rail_handle, &packet[0], packet_size_bytes, true);
-            if bytes_written != packet_size_bytes {
-                return Err(RailError::TxFifoWriteFail(bytes_written, packet_size_bytes));
+                sl_rail_write_tx_fifo(self.rail_handle, &packet[0], packet.len() as u16, true);
+            if bytes_written != packet.len() as u16 {
+                return Err(RailError::TxFifoWriteFail(
+                    bytes_written,
+                    packet.len() as u16,
+                ));
             }
 
             // channel ID is channel number start: https://github.com/SiliconLabs/simplicity_sdk/blob/b41bec3ff2485199c1a5a9995b3e649e118c1b8d/app/rail/component/sl_rail_sdk_phy_selector/sl_rail_sdk_phy_selector.c#L84
@@ -224,6 +231,10 @@ impl Radio {
             );
             if packet_handle.is_null() {
                 return Err(RailError::PacketBufferEmpty);
+            }
+
+            if packet_info.packet_bytes > target_buffer.len() as u16 {
+                return Err(RailError::BufferTooSmall(packet_info.packet_bytes));
             }
 
             sl_rail_copy_rx_packet(self.rail_handle, &mut target_buffer[0], &packet_info)

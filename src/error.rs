@@ -9,6 +9,7 @@ pub enum RailError {
     InvalidCall,
     SchedulingError,
     PacketBufferEmpty,
+    BufferTooSmall(u16),
     TxFifoWriteFail(u16, u16),
     UnknownError(u32),
 }
@@ -30,6 +31,10 @@ impl core::fmt::Display for RailError {
             RailError::UnknownError(error_code) => {
                 write!(f, "sl_rail failed with error code {error_code}")
             }
+            RailError::BufferTooSmall(packet_size) => write!(
+                f,
+                "the provided buffer is to small to store the full packet of size {packet_size}"
+            ),
         }
     }
 }

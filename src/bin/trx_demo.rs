@@ -32,7 +32,6 @@ fn main() -> ! {
 
     let radio_config = RadioConfig {
         tx_power_dbm: 0,
-        packet_length_bytes: PACKET_LENGTH_BYTES as u16,
         on_packet_received: || unsafe { PACKET_RECEIVED = true },
     };
     // TODO: add some error handling to this example app
