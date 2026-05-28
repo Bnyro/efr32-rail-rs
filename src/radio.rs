@@ -142,7 +142,11 @@ impl Radio {
             sl_rail_set_rx_transitions(rail_handle, &state_transitions).into_rail_result()?;
             sl_rail_set_tx_transitions(rail_handle, &state_transitions).into_rail_result()?;
 
-            Ok(p_rail_handle)
+            // start listening for packets
+            let channel = sl_rail_get_first_channel(rail_handle, rail_config);
+            sl_rail_start_rx(rail_handle, channel, core::ptr::null());
+
+            Ok(rail_handle)
         }
     }
 
