@@ -43,33 +43,31 @@ fn main() -> ! {
     let mut packet_received_counter = 0;
     let mut led_enabled = false;
     loop {
-        unsafe {
-            if PACKET_RECEIVED {
-                PACKET_RECEIVED = false;
-                packet_received_counter += 1;
+        if unsafe { PACKET_RECEIVED } {
+            unsafe { PACKET_RECEIVED = false };
+            packet_received_counter += 1;
 
-                let mut packet: [u8; PACKET_LENGTH_BYTES] = [0; PACKET_LENGTH_BYTES];
-                radio.read_received_packet(&mut packet).unwrap();
-                defmt::info!("received packet {}: {:X}", packet_received_counter, packet);
+            let mut packet: [u8; PACKET_LENGTH_BYTES] = [0; PACKET_LENGTH_BYTES];
+            radio.read_received_packet(&mut packet).unwrap();
+            defmt::info!("received packet {}: {:X}", packet_received_counter, packet);
 
-                led_enabled = !led_enabled;
-                set_led_state(&peripherals, led_enabled);
-            }
+            led_enabled = !led_enabled;
+            set_led_state(&peripherals, led_enabled);
+        }
 
-            if BUTTON_PRESSED {
-                BUTTON_PRESSED = false;
-                packet_sent_counter += 1;
+        if unsafe { BUTTON_PRESSED } {
+            unsafe { BUTTON_PRESSED = false };
+            packet_sent_counter += 1;
 
-                let out_packet: [u8; PACKET_LENGTH_BYTES] = [
-                    0x0F, 0x16, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB,
-                    0xCC, 0xDD, 0xEE,
-                ];
-                radio.send_packet(&out_packet).unwrap();
-                defmt::info!("sent packet {}: {:X}", packet_sent_counter, out_packet);
+            let out_packet: [u8; PACKET_LENGTH_BYTES] = [
+                0x0F, 0x16, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC,
+                0xDD, 0xEE,
+            ];
+            radio.send_packet(&out_packet).unwrap();
+            defmt::info!("sent packet {}: {:X}", packet_sent_counter, out_packet);
 
-                led_enabled = !led_enabled;
-                set_led_state(&peripherals, led_enabled);
-            }
+            led_enabled = !led_enabled;
+            set_led_state(&peripherals, led_enabled);
         }
     }
 }

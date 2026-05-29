@@ -1,7 +1,112 @@
 ## Rust wrapper and bindings for EFR32 Radio (via the RAIL API)
 
-Documentation to be done.
-
 ## Build dependencies
 - arm-none-eabi-gcc
 - arm-none-eabi-newlib
+
+## Usage
+First, please make sure to install all [Build dependencies](#build-dependencies) on your host.
+
+Add `efr32-rail` to your `Cargo.toml`:
+```toml
+[dependencies] 
+# general dependencies for cortex m boards, efr32-rail depends on using these
+cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
+cortex-m-rt = { version = "0.7.5", features = ["device"] }
+
+# PAC used by the Radio internally
+efr32mg22-pac = { git = "https://github.com/Bnyro/efr32mg22-pac", rev = "v0.1.1", features = ["critical-section", "rt"] }
+# actual efr32-rail dependency - defmt-logging optionally logs
+efr32-rail = { git = "https://github.com/Bnyro/efr32-rail", features = ["defmt-logging"] }
+```
+
+`efr32-rail` depends on `cortex-m-rt`s linker scripts to define interrupts, so your project must use these as well.
+
+### Using the radio
+Setting up a radio handle:
+```rs
+let peripherals = Peripherals::take().unwrap();
+// set up clocks for powering the radio, i.e. HFXO
+Radio::configure_clocks(&peripherals);
+
+let radio_config = RadioConfig::default();
+let radio = Radio::new(radio_config, /* pass a callback here. this gets called whenever receiving a packet */).unwrap();
+```
+
+Sending a packet:
+```rs
+let packet: [u8; _] = [0xDE, 0xAD, 0xC0, 0xDE];
+radio.send_packet(&packet).unwrap();
+```
+
+Reading a received packet: You can only do this AFTER the receive callback that you passed to `Radio::new` was called, otherwise this will result in an error!
+```rs
+// Reserve buffer space to copy the received packet into
+let mut buf: [u8; MAX_PACKET_LENGTH_BYTES] = [0; MAX_PACKET_LENGTH_BYTES];
+// the received packet might be shorter than the size of our buffer
+let packet_length = radio.read_received_packet(&mut buf).unwrap();
+let packet = &buf[0..packet_length];
+```
+
+### Minimal example app
+```rs
+// global variable for tracking whether a packet is ready to be read
+static mut PACKET_RECEIVED: bool = false;
+
+const MAX_PACKET_LENGTH_BYTES: usize = 16;
+
+#[cortex_m_rt::entry]
+fn main() -> {
+  let peripherals = Peripherals::take().unwrap();
+  // set up clocks for powering the radio, i.e. HFXO
+  Radio::configure_clocks(&peripherals);
+
+  let radio_config = RadioConfig::default();
+  let radio = Radio::new(radio_config, || unsafe { PACKET_RECEIVED = true }).unwrap();
+
+  // listen for incoming packets - if you only want to transmit packets, you don't need this line
+  radio.enable_receive().unwrap();
+
+  // this is very inefficient, only here for simplicity
+  let mut loop_counter = 0;
+  loop {
+    if unsafe { PACKET_RECEIVED } {
+        unsafe { PACKET_RECEIVED = false };
+
+        let mut buf: [u8; MAX_PACKET_LENGTH_BYTES] = [0; MAX_PACKET_LENGTH_BYTES];
+        // the received packet might be shorter than the size of our buffer
+        let packet_length = radio.read_received_packet(&mut buf).unwrap();
+        let packet = &buf[0..packet_length];
+
+        // you can now do whatever you want with the packet
+    }
+
+    // periodically send a packet
+    // TODO: replace this with a better condition for sending packets
+    if loop_counter == 5_000_000 {
+        loop_counter = 0;
+
+        let out_packet: [u8; _] = [
+            0x0F, 0x16, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB,
+            0xCC, 0xDD, 0xEE,
+        ];
+        radio.send_packet(&out_packet).unwrap();
+    }
+
+    loop_counter += 1;
+  }
+}
+```
+
+For more details, please see the documentation of `Radio` and `RadioConfig`.
+
+## Example App
+There's an example app that sends packets on button press.
+
+Prerequisite:
+- You have to own two [EFR32xG22 development kits, Rev A01](https://www.silabs.com/development-tools/wireless/efr32xg22e-explorer-kit?tab=overview). This might also work with other boards, but not tested.
+
+To run it:
+1. Connect your two EFR32xG22 development boards via USB.
+2. Run `cargo run --features defmt-logging`, once for each board.
+3. Press the inbuilt button `BTN0` on one board. The LED of the other board should now turn on automatically as well.
