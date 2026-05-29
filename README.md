@@ -1,6 +1,8 @@
 ## Rust wrapper and bindings for EFR32 Radio (via the RAIL API)
 
 ## Build dependencies
+- git-lfs (for downloading the RAIL blobs)
+- clang (linking and compiling)
 - arm-none-eabi-gcc
 - arm-none-eabi-newlib
 
