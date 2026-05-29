@@ -48,7 +48,7 @@ let packet_length = radio.read_received_packet(&mut buf).unwrap();
 let packet = &buf[0..packet_length];
 ```
 
-### Minimal example app
+### Minimal app
 ```rs
 // global variable for tracking whether a packet is ready to be read
 static mut PACKET_RECEIVED: bool = false;
@@ -100,8 +100,10 @@ fn main() -> {
 
 For more details, please see the documentation of `Radio` and `RadioConfig`.
 
-## Example App
-There's an example app that sends packets on button press.
+## Examples
+There's an example app included in this repo:
+- On button press, it sends packets.
+- On packet receival, it toggles the LED.
 
 Prerequisite:
 - You have to own two [EFR32xG22 development kits, Rev A01](https://www.silabs.com/development-tools/wireless/efr32xg22e-explorer-kit?tab=overview). This might also work with other boards, but not tested.
@@ -110,3 +112,13 @@ To run it:
 1. Connect your two EFR32xG22 development boards via USB.
 2. Run `cargo run --features defmt-logging`, once for each board.
 3. Press the inbuilt button `BTN0` on one board. The LED of the other board should now turn on automatically as well.
+
+## Adding support for other EFRs
+The only board this is tested with is the EFR32xG22 development board. However, since the EFR32 SoCs are mostly very similar to each other, it should definitely be possible to support other boards as well with few efforts.
+
+Steps:
+- Provide a custom PAC for your board. You have to generate it using `svd2rust` using the SVDs from <https://www.keil.arm.com/packs/>.
+- Manually add the interrupt request lines for the radio to the PAC (e.g. `MODEM`, `RFSENSE`, ...). Although they're not part of the SVDs, they are listed in the reference manual and required for radio operation.
+- Do a grep for the EFR32MG22: `grep --ignore-case efr32mg22 c-inc build.rs src/radio.rs` and replace all these with your own board.
+
+It would probably be cool to support different boards by specifying a cargo feature like `features = ["efr32mg24"]`, pull requests welcome.
