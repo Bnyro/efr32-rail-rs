@@ -30,12 +30,9 @@ fn main() -> ! {
     // set up clocks for powering the radio
     Radio::configure_clocks(&peripherals);
 
-    let radio_config = RadioConfig {
-        tx_power_dbm: 20,
-        on_packet_received: || unsafe { PACKET_RECEIVED = true },
-    };
+    let radio_config = RadioConfig::default();
     // TODO: add some error handling to this example app
-    let radio = Radio::new(radio_config).unwrap();
+    let radio = Radio::new(radio_config, || unsafe { PACKET_RECEIVED = true }).unwrap();
     radio.enable_receive().unwrap();
 
     // set up GPIO peripherals for the app

@@ -37,8 +37,17 @@ unsafe extern "C" fn init_callback(_c: RAIL_Handle_t) {
 
 #[derive(Clone, Copy)]
 pub struct RadioConfig {
+    // TODO: add more options here
     pub tx_power_dbm: i16,
-    pub on_packet_received: fn(),
+}
+
+impl Default for RadioConfig {
+    /// Create a radio config with the default options set.
+    ///
+    /// To configure the options manually, please construct a [RadioConfig] directly.
+    fn default() -> Self {
+        Self { tx_power_dbm: 0 }
+    }
 }
 
 pub struct Radio {
@@ -79,12 +88,12 @@ impl Radio {
     /// If the initialization succeeds, you can then call [Radio::start_receive]
     /// to start listening for incoming packets or [Radio::send_packet] to transmit
     /// a packet.
-    pub fn new(radio_config: RadioConfig) -> RailResult<Self> {
+    pub fn new(radio_config: RadioConfig, on_packet_received: fn()) -> RailResult<Self> {
         // The config if from the code example at https://docs.silabs.com/rail/latest/rail-api/
         let rail_config = unsafe {
             sl_rail_config {
                 events_callback: Some(events_callback),
-                p_opaque_handle1: radio_config.on_packet_received as *mut c_void,
+                p_opaque_handle1: on_packet_received as *mut c_void,
                 p_opaque_handle2: core::ptr::null_mut(),
                 opaque_value: [0],
                 rx_packet_queue_entries: SL_RAIL_BUILTIN_RX_PACKET_QUEUE_ENTRIES as u16,
