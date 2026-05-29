@@ -99,6 +99,7 @@ fn main() {
         // we override this method to be able to intercept RAIL error codes on crashes for debugging
         .blocklist_function("RAILCb_AssertFailed")
         .clang_arg("-I/usr/arm-none-eabi/include") // include stdlib headers (e.g. string.h)
+        .clang_arg("-I/usr/lib/arm-none-eabi") // of course ubuntu puts the headers somewhere else
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate()
         .unwrap();
