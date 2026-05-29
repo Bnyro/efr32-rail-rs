@@ -197,7 +197,7 @@ impl Radio {
     pub fn send_packet(&self, packet: &[u8]) -> RailResult<()> {
         unsafe {
             assert!(
-                packet.len() < RX_FIFO_LENGTH_BYTES,
+                packet.len() <= RX_FIFO_LENGTH_BYTES,
                 "packet can't be larger than {}",
                 RX_FIFO_LENGTH_BYTES
             );
