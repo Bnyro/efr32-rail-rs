@@ -2,4 +2,4 @@
 
 pub mod error;
 pub mod radio;
-mod rail;
+pub mod rail;

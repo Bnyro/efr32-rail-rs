@@ -11,6 +11,10 @@ name = "efr32_rail"
 name = "trx_demo"
 required-features = ["defmt-logging"]
 
+[[bin]]
+name = "rail_direct_access_demo"
+required-features = ["defmt-logging"]
+
 [dependencies]
 cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
 cortex-m-rt = { version = "0.7.5", features = ["device"] }
