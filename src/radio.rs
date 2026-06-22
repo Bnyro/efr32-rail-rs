@@ -69,13 +69,19 @@ impl Radio {
     /// Configure required clocks for starting the Radio.
     pub fn configure_clocks(peripherals: &Peripherals) {
         // enable HFXO Clock
-        peripherals.cmu_ns.clken0().write(|w| w.hfxo0().set_bit());
+        peripherals
+            .cmu_ns
+            .clken0()
+            .modify(|_, w| w.hfxo0().set_bit());
         peripherals.hfxo0_ns.ctrl().write(|w| w.forceen().set_bit());
         // wait until the clock finished starting
         while peripherals.hfxo0_ns.status().read().rdy().bit_is_clear() {}
         // set sysclk to HFXO Clock - this is required according to https://docs.silabs.com/rail/latest/rail-api/efr32-main#high-frequency-clocks
         // otherwise sl_rail_configure_channels will crash
-        peripherals.cmu_ns.sysclkctrl().write(|w| w.clksel().hfxo());
+        peripherals
+            .cmu_ns
+            .sysclkctrl()
+            .modify(|_, w| w.clksel().hfxo());
     }
 
     /// Create and initialize the radio. This immediately starts listening for packets.
