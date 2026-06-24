@@ -32,7 +32,11 @@ fn main() -> ! {
 
     let radio_config = RadioConfig::default();
     // TODO: add some error handling to this example app
-    let radio = Radio::new(radio_config, || unsafe { PACKET_RECEIVED = true }).unwrap();
+    let radio = Radio::new(radio_config, |event| match event {
+        efr32_rail::radio::RadioEvent::PacketReceived => unsafe { PACKET_RECEIVED = true },
+        efr32_rail::radio::RadioEvent::PacketSent => {}
+    })
+    .unwrap();
     radio.enable_receive().unwrap();
 
     // set up GPIO peripherals for the app

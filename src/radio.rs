@@ -14,19 +14,37 @@ pub const RX_FIFO_LENGTH_BYTES: usize = 512;
 // write received packets into it.
 static mut FIFO_BUFFER: [u32; RX_FIFO_LENGTH_BYTES / 4] = [0; RX_FIFO_LENGTH_BYTES / 4];
 
+#[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
+pub enum RadioEvent {
+    PacketSent,
+    PacketReceived,
+}
+
 unsafe extern "C" fn events_callback(rail_handle: sl_rail_handle_t, event: sl_rail_events_t) {
     // ... handle RAIL events, e.g., receive and transmit completion
-    if event == SL_RAIL_EVENT_RX_PACKET_RECEIVED.into() {
-        #[cfg(feature = "defmt-logging")]
-        defmt::info!("received packet");
+    match event as u32 {
+        SL_RAIL_EVENT_RX_PACKET_RECEIVED => {
+            #[cfg(feature = "defmt-logging")]
+            defmt::info!("receive packet event consumed");
 
-        let radio = Radio::from(rail_handle);
+            let radio = Radio::from(rail_handle);
 
-        // Keep the received packet inside the queue and don't automatically flush it.
-        radio.hold_packet();
+            // Keep the received packet inside the queue and don't automatically flush it.
+            radio.hold_packet();
 
-        // trigger receive listener
-        radio.trigger_receive_callback();
+            // trigger receive listener
+            radio.trigger_event_callback(RadioEvent::PacketReceived);
+        }
+        SL_RAIL_EVENT_TX_PACKET_SENT => {
+            #[cfg(feature = "defmt-logging")]
+            defmt::info!("send packet event consumed");
+
+            let radio = Radio::from(rail_handle);
+
+            // trigger packet sent listener
+            radio.trigger_event_callback(RadioEvent::PacketSent);
+        }
+        _ => { /* ignore all other events */ }
     }
 }
 
@@ -94,12 +112,15 @@ impl Radio {
     /// If the initialization succeeds, you can then call [Radio::start_receive]
     /// to start listening for incoming packets or [Radio::send_packet] to transmit
     /// a packet.
-    pub fn new(radio_config: RadioConfig, on_packet_received: fn()) -> RailResult<Self> {
+    pub fn new(
+        radio_config: RadioConfig,
+        on_radio_event: fn(event: RadioEvent),
+    ) -> RailResult<Self> {
         // The config if from the code example at https://docs.silabs.com/rail/latest/rail-api/
         let rail_config = unsafe {
             sl_rail_config {
                 events_callback: Some(events_callback),
-                p_opaque_handle1: on_packet_received as *mut c_void,
+                p_opaque_handle1: on_radio_event as *mut c_void,
                 p_opaque_handle2: core::ptr::null_mut(),
                 opaque_value: [0],
                 rx_packet_queue_entries: SL_RAIL_BUILTIN_RX_PACKET_QUEUE_ENTRIES as u16,
@@ -239,10 +260,11 @@ impl Radio {
     }
 
     /// Call the user-provided callback when a packet gets received.
-    fn trigger_receive_callback(&self) {
+    fn trigger_event_callback(&self, event: RadioEvent) {
         let rail_config = unsafe { sl_rail_get_config(self.rail_handle) };
-        let callback: fn() = unsafe { core::mem::transmute((*rail_config).p_opaque_handle1) };
-        callback();
+        let callback: fn(event: RadioEvent) =
+            unsafe { core::mem::transmute((*rail_config).p_opaque_handle1) };
+        callback(event);
     }
 
     /// Read a received packet.
