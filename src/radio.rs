@@ -14,7 +14,7 @@ pub const RX_FIFO_LENGTH_BYTES: usize = 512;
 // write received packets into it.
 static mut FIFO_BUFFER: [u32; RX_FIFO_LENGTH_BYTES / 4] = [0; RX_FIFO_LENGTH_BYTES / 4];
 
-#[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Clone, Copy)]
 pub enum RadioEvent {
     PacketSent,
     PacketReceived,
