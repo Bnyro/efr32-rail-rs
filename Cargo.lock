@@ -177,7 +177,7 @@ dependencies = [
 
 [[package]]
 name = "efr32-rail"
-version = "0.1.2"
+version = "0.1.4"
 dependencies = [
  "bindgen",
  "cc",
@@ -191,7 +191,8 @@ dependencies = [
 [[package]]
 name = "efr32mg22-pac"
 version = "0.1.1"
-source = "git+https://github.com/Bnyro/efr32mg22-pac?rev=v0.1.1#42cb3b7e40ab43182b98c008e69cee37048b9d65"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7cf183ae50200fd869500860b61f09ef3e1268d4e7952fb2011b4bf98616b05d"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
